@@ -22,6 +22,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.Registrant;
 import android.os.RegistrantList;
+import android.os.SystemProperties;
 import android.telephony.Rlog;
 
 import com.android.internal.telephony.CommandsInterface;
@@ -210,8 +211,20 @@ public class UiccController extends Handler {
             //Create new card
             mUiccCard = new UiccCard(mContext, mCi, status);
         } else {
-            //Update already existing card
-            mUiccCard.update(mContext, mCi , status);
+			/*
+			 * In android4.2, UiccCard will not free until pad power off.
+			 * it only suitable for phone platform, not suitable for external dongle.
+			 *
+			 */
+            if(SystemProperties.get("ro.sw.embeded.telephony").equals("true")) {
+				//Update already existing card
+				Log.i(LOG_TAG, "Update already existing card");
+				mUiccCard.update(mContext, mCi , status);
+			}else{
+				Log.i(LOG_TAG, "external dongle platform, create new card");
+				mUiccCard.dispose();
+				mUiccCard = new UiccCard(mContext, mCi, status);
+			}
         }
 
         if (DBG) log("Notifying IccChangedRegistrants");
