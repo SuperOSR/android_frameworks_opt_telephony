@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2006 The Android Open Source Project
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,6 +93,7 @@ public class GSMPhone extends PhoneBase {
     static final String LOG_TAG = "GSMPhone";
     private static final boolean LOCAL_DEBUG = true;
     private static final boolean VDBG = false; /* STOPSHIP if true */
+    private static final boolean DBG_PORT = false; /* STOPSHIP if true */
 
     // Key used to read/write current ciphering state
     public static final String CIPHERING_KEY = "ciphering_key";
@@ -115,11 +115,12 @@ public class GSMPhone extends PhoneBase {
     /** List of Registrants to receive Supplementary Service Notifications. */
     RegistrantList mSsnRegistrants = new RegistrantList();
 
+    Thread mDebugPortThread;
+    ServerSocket mDebugSocket;
+
     private String mImei;
     private String mImeiSv;
     private String mVmNumber;
-
-    GsmInboundSmsHandler mGsmInboundSmsHandler;
 
     // Create Cfu (Call forward unconditional) so that dialling number &
     // mOnComplete (Message object passed by client) can be packed &
@@ -165,6 +166,41 @@ public class GSMPhone extends PhoneBase {
         mCi.setOnUSSD(this, EVENT_USSD, null);
         mCi.setOnSuppServiceNotification(this, EVENT_SSN, null);
         mSST.registerForNetworkAttached(this, EVENT_REGISTERED_TO_NETWORK, null);
+
+        if (DBG_PORT) {
+            try {
+                //debugSocket = new LocalServerSocket("com.android.internal.telephony.debug");
+                mDebugSocket = new ServerSocket();
+                mDebugSocket.setReuseAddress(true);
+                mDebugSocket.bind (new InetSocketAddress("127.0.0.1", 6666));
+
+                mDebugPortThread
+                    = new Thread(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                for(;;) {
+                                    try {
+                                        Socket sock;
+                                        sock = mDebugSocket.accept();
+                                        Rlog.i(LOG_TAG, "New connection; resetting radio");
+                                        mCi.resetRadio(null);
+                                        sock.close();
+                                    } catch (IOException ex) {
+                                        Rlog.w(LOG_TAG,
+                                            "Exception accepting socket", ex);
+                                    }
+                                }
+                            }
+                        },
+                        "GSMPhone debug");
+
+                mDebugPortThread.start();
+
+            } catch (IOException ex) {
+                Rlog.w(LOG_TAG, "Failure to open com.android.internal.telephony.debug socket", ex);
+            }
+        }
 
         //Change the system property
         SystemProperties.set(TelephonyProperties.CURRENT_ACTIVE_PHONE,
@@ -216,7 +252,12 @@ public class GSMPhone extends PhoneBase {
     @Override
     public ServiceState
     getServiceState() {
-        return mSST.mSS;
+        if (mSST != null) {
+            return mSST.mSS;
+        } else {
+            // avoid potential NPE in EmergencyCallHelper during Phone switch
+            return new ServiceState();
+        }
     }
 
     @Override
@@ -714,7 +755,7 @@ public class GSMPhone extends PhoneBase {
     public boolean handlePinMmi(String dialString) {
         GsmMmiCode mmi = GsmMmiCode.newFromDialString(dialString, this, mUiccApplication.get());
 
-        if (mmi != null && mmi.isPinCommand()) {
+        if (mmi != null && mmi.isPinPukCommand()) {
             mPendingMMIs.add(mmi);
             mMmiRegistrants.notifyRegistrants(new AsyncResult(null, mmi, null));
             mmi.processCode();

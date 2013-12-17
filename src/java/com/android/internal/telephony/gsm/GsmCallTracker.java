@@ -29,9 +29,6 @@ import android.telephony.gsm.GsmCellLocation;
 import android.util.EventLog;
 import android.telephony.Rlog;
 
-import android.content.Context;
-import android.media.AudioManager;
-
 import com.android.internal.telephony.CallStateException;
 import com.android.internal.telephony.CallTracker;
 import com.android.internal.telephony.CommandsInterface;
@@ -90,9 +87,7 @@ public final class GsmCallTracker extends CallTracker {
 
     PhoneConstants.State mState = PhoneConstants.State.IDLE;
 
-    private AudioManager mAudioManager;
-    private int latestCallState = -1;    //add by liuhanlei;
-    private int currentCallState = 0;
+
 
     //***** Events
 
@@ -107,7 +102,6 @@ public final class GsmCallTracker extends CallTracker {
 
         mCi.registerForOn(this, EVENT_RADIO_AVAILABLE, null);
         mCi.registerForNotAvailable(this, EVENT_RADIO_NOT_AVAILABLE, null);
-        mAudioManager = (AudioManager) phone.getContext().getSystemService(Context.AUDIO_SERVICE);
     }
 
     public void dispose() {
@@ -410,25 +404,13 @@ public final class GsmCallTracker extends CallTracker {
     updatePhoneState() {
         PhoneConstants.State oldState = mState;
 
-        currentCallState = 0;
         if (mRingingCall.isRinging()) {
             mState = PhoneConstants.State.RINGING;
         } else if (mPendingMO != null ||
                 !(mForegroundCall.isIdle() && mBackgroundCall.isIdle())) {
             mState = PhoneConstants.State.OFFHOOK;
-            if ((mForegroundCall.getState() == GsmCall.State.ACTIVE ||
-                 mBackgroundCall.getState() == GsmCall.State.HOLDING) &&
-                 !mAudioManager.isBluetoothScoOn()) {
-
-                 currentCallState = 1;
-            }
         } else {
             mState = PhoneConstants.State.IDLE;
-        }
-
-        if(latestCallState != currentCallState){
-            setTalkingStandbyState();
-            latestCallState = currentCallState;
         }
 
         if (mState == PhoneConstants.State.IDLE && oldState != mState) {
@@ -443,50 +425,6 @@ public final class GsmCallTracker extends CallTracker {
             mPhone.notifyPhoneStateChanged();
         }
     }
-
-	private void setTalkingStandbyState(){
-		Log.i(LOG_TAG,"enter setTalkingStandbyState ");
-		File mSceneLockFile = new File("/sys/power/scene_lock");
-		File mSceneUnlockFile = new File("/sys/power/scene_unlock");
-		  
-		FileOutputStream mSceneLockStream = null;
-		FileOutputStream mSceneUnlockStream = null;
-		try{
-		    Log.i(LOG_TAG,"enter setTalkingStandbyState try");
-		    if(SystemProperties.getInt("rw.talkingstandby.enabled", 0) == 1){
-		        Log.i(LOG_TAG,"enter setTalkingStandbyState rw.talkingstandby = 1");
-		        mSceneLockStream = new FileOutputStream(mSceneLockFile);
-		        Log.i(LOG_TAG,"enter setTalkingStandbyState FileOutputStream");
-		        mSceneUnlockStream = new FileOutputStream(mSceneUnlockFile);
-
-		        if(currentCallState == 0){
-		            Log.i(LOG_TAG,"sceneunlock write talking_standby");
-		            mSceneUnlockStream.write("talking_standby".getBytes("utf-8"));
-		        }else{
-		            Log.i(LOG_TAG,"scenelock write talking_standby");
-		            mSceneLockStream.write("talking_standby".getBytes("utf-8"));
-		        }
-		   }
-		}catch(IOException e){
-		   Log.i(LOG_TAG,"new FileOutputStream or write faild" );
-		}
-		finally{
-		    if(mSceneLockStream != null){
-		        try{
-		            mSceneLockStream.close();
-		        }catch(Exception e){
-		            Log.i(LOG_TAG,"close mSceneLockStream failed");
-		        }
-		    }
-		    if(mSceneUnlockStream != null){
-		        try{
-		            mSceneUnlockStream.close();
-		        }catch(Exception e){
-		            Log.i(LOG_TAG,"close mSceneUnlockStream failed");
-		        }
-		    }
-	   }
-	}
 
     @Override
     protected synchronized void

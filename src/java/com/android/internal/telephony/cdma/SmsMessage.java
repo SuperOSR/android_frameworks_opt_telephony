@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -730,11 +729,6 @@ public class SmsMessage extends SmsMessageBase {
 
         if (mOriginatingAddress != null) {
             mOriginatingAddress.address = new String(mOriginatingAddress.origBytes);
-            if (mOriginatingAddress.ton == CdmaSmsAddress.TON_INTERNATIONAL_OR_IP) {
-                if (mOriginatingAddress.address.charAt(0) != '+') {
-                    mOriginatingAddress.address = "+" + mOriginatingAddress.address;
-                }
-            }
             if (VDBG) Rlog.v(LOG_TAG, "SMS originating address: "
                     + mOriginatingAddress.address);
         }
@@ -856,7 +850,7 @@ public class SmsMessage extends SmsMessageBase {
          * Convert + code to 011 and dial out for international SMS
          */
         CdmaSmsAddress destAddr = CdmaSmsAddress.parse(
-                PhoneNumberUtils.cdmaCheckAndProcessPlusCode(destAddrStr));
+                PhoneNumberUtils.cdmaCheckAndProcessPlusCodeForSms(destAddrStr));
         if (destAddr == null) return null;
 
         BearerData bearerData = new BearerData();
